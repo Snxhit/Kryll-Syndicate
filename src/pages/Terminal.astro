@@ -1,0 +1,9 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TerminalLogic from '../components/TerminalLogic.jsx';
+---
+
+<BaseLayout>
+  <h1>Terminal</h1>
+  <TerminalLogic client:only="preact" />
+</BaseLayout>

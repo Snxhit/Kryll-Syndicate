@@ -1,0 +1,9 @@
+---
+import PythonExecutor from '../components/PythonExecutor.jsx';
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout>
+	<h1>Code Editor</h1>
+  <PythonExecutor client:only="preact" />
+</BaseLayout>
