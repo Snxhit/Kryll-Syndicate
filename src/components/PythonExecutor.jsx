@@ -1,97 +1,110 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
+import KryllScript from "../kryllscript/ks.py?raw";
 
 export default function PythonExecutor() {
-    const [pyodide, setPyodide] = useState(null);
-    const [code, setCode] = useState('');
-    const [output, setOutput] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [filename, setFilename] = useState('');
-    const [isFileOpened, setIsFileOpened] = useState(false);
+  const [code, setCode] = useState('');
+  const [output, setOutput] = useState('');
+  const [filename, setFilename] = useState('');
+  const [isFileOpened, setIsFileOpened] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('');
+  const workerRef = useRef(null);
 
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const file = params.get('file');
-        if (file)
-        {
-          setIsFileOpened(true);
-          setFilename(file || '');
-          setCode(localStorage.getItem(file) || '');
-        }
-        async function loadPyodide() {
-            try {
-                setLoading(true);
-                const pyodideModule = await import('https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.mjs');
-                const py = await pyodideModule.loadPyodide();
-                setPyodide(py);
-            } catch (err) {
-                setOutput(`Failed to load Pyodide: ${err.message}`);
-            } finally {
-                setLoading(false);
-            }
-        }
-        loadPyodide();
-    }, []);
-
-    function saveFile()
-    {
-      if (filename && code)
-      {
-        localStorage.setItem(filename, code)
-        setIsFileOpened(true);
-      }
-    }  
-
-    async function runPython() {
-        if (!pyodide) {
-            setOutput("Please wait...");
-            return;
-        }
-
-        try {
-            // Redirect Python print output to a string
-            pyodide.runPython(`
-import sys
-from io import StringIO
-sys.stdout = sys.stderr = StringIO()
-            `);
-
-            // Execute user code
-            pyodide.runPython(code);
-            // localStorage.setItem("test", code)
-
-            // Get the printed output
-            const result = pyodide.runPython("sys.stdout.getvalue()");
-            setOutput(result || "No output");
-        } catch (err) {
-            setOutput(`Error: ${err.message}`);
-        }
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const file = params.get('file');
+    if (file) {
+      setIsFileOpened(true);
+      setFilename(file || '');
+      setCode(localStorage.getItem(file) || '');
     }
 
-    return (
-        <div>
-            <textarea
-                rows="30"
-                cols="200"
-                placeholder="Write Python code here..."
-                value={code}
-                onInput={(e) => setCode(e.target.value)}
-            />
-            <br />
-            <input
-              type="text"
-              value={filename}
-              disabled={isFileOpened}
-              placeholder="File name"
-              onInput={(e) => setFilename(e.target.value)}
-            />
-            <br />
-            <button onClick={runPython} disabled={loading}>
-                {loading ? "Please wait..." : "Run Python"}
-            </button>
-            <button onClick={saveFile} disabled={loading}>
-              {loading ? "Please wait..." : "Save file"}
-            </button>
-            <pre>{output}</pre>
-        </div>
-    );
+    const worker = new Worker('/pyodide-worker.js');
+    workerRef.current = worker;
+
+    worker.onmessage = (event) =>
+    {
+      const { type, output, error, message } = event.data;
+
+      if (type === "ready")
+      {
+       setLoading(false);
+      }
+      else if (type === "result")
+      {
+       setOutput(output || "No output");
+       setLoading(false);
+      }
+      else if (type === "error")
+      {
+       setOutput(`Error: ${error}`);
+       setLoading(false);
+      }
+      else if (type === "status")
+      {
+       setStatusMessage(`Status: ${message}`);
+      }
+    };
+
+  return () => worker.terminate();
+  }, []);
+
+  function saveFile()
+  {
+    if (filename && code) {
+      localStorage.setItem(filename, code);
+      setIsFileOpened(true);
+    }
+  }
+
+  function runPython()
+  {
+    if (!workerRef.current) {
+      setOutput("Worker not ready.");
+      return;
+    }
+    setLoading(true);
+    setOutput("Running...");
+    workerRef.current.postMessage({
+      type: "run",
+      code,
+      kryllScript: KryllScript,
+    });
+  }
+
+  return (
+    <div>
+      <p id="gameStatus">{statusMessage}</p>
+
+      <textarea
+        style={{
+          width: "98vw",
+        }}
+        rows="30"
+        cols="200"
+        placeholder="Write Python code here..."
+        value={code}
+        onInput={(e) => setCode(e.target.value)}
+      />
+      <br />
+
+      <input
+        type="text"
+        value={filename}
+        disabled={isFileOpened}
+        placeholder="File name"
+        onInput={(e) => setFilename(e.target.value)}
+      />
+      <br />
+
+      <button onClick={runPython} disabled={loading}>
+        {loading ? "Please wait..." : "Run Python"}
+      </button>
+      <button onClick={saveFile} disabled={loading}>
+        {loading ? "Please wait..." : "Save file"}
+      </button>
+
+      <pre>{output}</pre>
+    </div>
+  );
 }

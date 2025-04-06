@@ -47,7 +47,7 @@ export default function TerminalLogic()
           fontSize: "16px",
           border: "10px",
           borderRadius: "10px",
-          outline: "3px solid #fffa9e",
+          outline: "2px solid #454444",
           backgroundColor: "#222",
           color: "#fff",
         }}
